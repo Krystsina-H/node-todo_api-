@@ -288,6 +288,6 @@ app.use((error, req, res, next) => {
   console.error('Ошибка:', error);
   res.status(500).json({ message: 'Внутренняя ошибка сервера.' });
 });
-app.listen(process.env.PORT2, () => {
+app.listen(process.env.PORT, () => {
   console.log('Стартуем!');
 });
