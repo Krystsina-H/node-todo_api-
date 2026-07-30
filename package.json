@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "dev2": "nodemon tasks.js"
+    "dev2": "nodemon example.js"
   },
   "dependencies": {
     "@sentry/node": "^10.67.0",
