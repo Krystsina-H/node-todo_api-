@@ -1,0 +1,29 @@
+{
+  "users": [
+    {
+      "id": "026dbcfe-9907-4213-a114-3aa23a967dbe",
+      "email": "test@mail.ru",
+      "passwordHash": "$2b$10$8RNa6yHBJJRrUF62jzeFGOZf3p3kKg0fBQgQpCgZvj.la8J55J52e"
+    }
+  ],
+  "tasks": [
+    {
+      "userId": "026dbcfe-9907-4213-a114-3aa23a967dbe",
+      "id": "1",
+      "title": "Проверить список задач",
+      "completed": true
+    },
+    {
+      "userId": "026dbcfe-9907-4213-a114-3aa23a967dbe",
+      "id": "adeb1a57-a6c9-4164-9e8f-283c5e60b60c",
+      "title": "Проверить список задач",
+      "completed": false
+    },
+    {
+      "userId": "026dbcfe-9907-4213-a114-3aa23a967dbe",
+      "id": "e49d830f-3fc5-410d-8775-262738781d95",
+      "title": "НОВАЯ ЗАДАЧА",
+      "completed": false
+    }
+  ]
+}

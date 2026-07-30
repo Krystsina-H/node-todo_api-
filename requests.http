@@ -1,0 +1,63 @@
+@token={{login.response.body.token}}
+
+###POST_reg регистрация
+POST http://localhost:5001/register
+Content-Type: application/json
+
+{
+    "email":"test@mail.ru",
+    "password":"123456"
+}
+
+###POST_login
+# @name login
+POST http://localhost:5001/login
+Content-Type: application/json
+
+{
+     "email":"test@mail.ru",
+    "password":"123456"
+}
+
+
+
+### GET1 получить все
+GET http://localhost:5001/tasks
+Authorization: Bearer {{token}}
+
+### GET2 получить по id
+GET http://localhost:5001/tasks/2
+Authorization: Bearer {{token}}
+
+### POST создать
+POST http://localhost:5001/tasks
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "title":"НОВАЯ ЗАДАЧА"
+}
+
+
+### PUT изменить title
+PUT http://localhost:5001/tasks/2
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "title":"СЪЕЗДИТЬ В ПОЕЗДКУ"
+    
+}
+
+### PATCH изменить статус
+PATCH http://localhost:5001/tasks/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "completed": true
+}
+
+### DElete 
+DELETE http://localhost:5001/tasks/2
+Authorization: Bearer {{token}}
