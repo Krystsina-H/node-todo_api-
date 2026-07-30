@@ -24,10 +24,15 @@ const { body } = require('express-validator');
 const { randomUUID } = require('crypto');
 
 app.use(express.json());
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
+});
+
+app.get('/', (req, res) => {
+  res.redirect('/api-docs');
 });
 
 //чтение БД (файла db.json)
@@ -37,8 +42,9 @@ async function readBD() {
     return JSON.parse(data);
   } catch (error) {
     if (error.code == 'ENOENT') {
-      await fs.writeFile(DB, JSON.stringify([], null, 2));
-      return [];
+      const initialData = { users: [], tasks: [] };
+      await fs.writeFile(DB, JSON.stringify(initialData, null, 2));
+      return initialData;
     }
     throw error;
   }
@@ -48,11 +54,6 @@ async function readBD() {
 async function writeBD(data) {
   await fs.writeFile(DB, JSON.stringify(data, null, 2));
 }
-
-app.get('/', (req, res) => {
-  res.redirect('/api-docs');
-});
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.post('/register', async (req, res) => {
   const { email, password } = req.body;
@@ -74,9 +75,12 @@ app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   const db = await readBD();
   const user = db.users.find((i) => i.email === email);
+  if (!user) {
+    return res.status(401).json({ error: 'Неверный email или пароль' });
+  }
   const pass = await bcrypt.compare(password, user.passwordHash);
-  if (!user || !pass) {
-    res.status(401).json('неверный email или пароль');
+  if (!pass) {
+    return res.status(401).json({ error: 'Неверный email или пароль' });
   }
   res.json({ token: signToken(user) });
 });
