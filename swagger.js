@@ -1,4 +1,3 @@
-// swagger.js
 const swaggerUi = require('swagger-ui-express');
 
 const spec = {
