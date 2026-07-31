@@ -87,14 +87,33 @@ app.post('/login', async (req, res) => {
   res.json({ token: signToken(user) });
 });
 //ФОРМИРУЕМ ТОКЕН!!!!! И ВЫЗЫВАЕМ ВЫШЕ
+// ФОРМИРУЕМ ТОКЕН!!!!! И ВЫЗЫВАЕМ ВЫШЕ
 function signToken(user) {
+  // Если в .env строка '1h' - оставляем как есть. Если '3600' - превращаем в число
+  let ttl = process.env.TOKEN_TTL;
+  if (typeof ttl === 'string' && /^\d+$/.test(ttl)) {
+    ttl = parseInt(ttl, 10);
+  }
+
   return jwt.sign({ id: user.id, email: user.email }, process.env.SECRET, {
-    expiresIn: process.env.TOKEN_TTL,
+    expiresIn: ttl, // Теперь это значение безопасно для библиотеки
   });
 }
 
 function auth(req, res, next) {
-  const [scheme, token] = req.headers.authorization.split(' ');
+  // 1. Проверяем, есть ли вообще заголовок, чтобы не упасть
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Токен не предоставлен' });
+  }
+
+  // 2. Теперь безопасно делаем split, так как мы знаем, что authHeader существует
+  const [scheme, token] = authHeader.split(' ');
+
+  // 3. Проверяем формат
+  if (scheme !== 'Bearer' || !token) {
+    return res.status(401).json({ error: 'Неверный формат токена' });
+  }
 
   try {
     req.user = jwt.verify(token, process.env.SECRET, { algorithms: ['HS256'] });
@@ -106,7 +125,6 @@ function auth(req, res, next) {
       .json({ error: expired ? 'Токен истёк' : 'Токен невалиден' });
   }
 }
-
 // GET получить все таски
 app.get(
   '/tasks',
