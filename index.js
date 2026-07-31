@@ -1,5 +1,6 @@
 const { error } = require('console');
 const express = require('express');
+const cors = require('cors');
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const swaggerUi = require('swagger-ui-express');
@@ -23,6 +24,7 @@ const {
 const { body } = require('express-validator');
 const { randomUUID } = require('crypto');
 
+app.use(cors());
 app.use(express.json());
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

@@ -4,6 +4,11 @@
       "id": "026dbcfe-9907-4213-a114-3aa23a967dbe",
       "email": "test@mail.ru",
       "passwordHash": "$2b$10$8RNa6yHBJJRrUF62jzeFGOZf3p3kKg0fBQgQpCgZvj.la8J55J52e"
+    },
+    {
+      "id": "f02bb1ec-fc7f-4312-8346-4eeadbd16469",
+      "email": "test1@mail.ru",
+      "passwordHash": "$2b$10$2ojijITKf3MFxJPMl.3DbOr6sZNKMDoKHyFfU1iZIhx21jcNv1hMK"
     }
   ],
   "tasks": [
@@ -23,6 +28,12 @@
       "userId": "026dbcfe-9907-4213-a114-3aa23a967dbe",
       "id": "e49d830f-3fc5-410d-8775-262738781d95",
       "title": "НОВАЯ ЗАДАЧА",
+      "completed": false
+    },
+    {
+      "userId": "f02bb1ec-fc7f-4312-8346-4eeadbd16469",
+      "id": "5b55ee28-fa32-46b5-832b-b04948d47af1",
+      "title": "Пройти курс",
       "completed": false
     }
   ]
