@@ -4,7 +4,7 @@ function taskId() {
   return param('id')
     .isUUID(4)
     .withMessage('id должен быть положительным целым числом')
-    .toInt();
+    .trim();
 }
 
 function title({ optional = false } = {}) {
