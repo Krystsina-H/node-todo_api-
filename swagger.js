@@ -19,6 +19,10 @@ const spec = {
       url: 'http://localhost:5001',
       description: 'Development server',
     },
+    {
+      url: 'https://node-todo-api-binb.onrender.com',
+      description: 'Production server (Render)',
+    },
   ],
 
   components: {
