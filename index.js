@@ -144,11 +144,11 @@ app.get(
       // Фильтруем задачи именно этого пользователя
       let userTask = db.tasks.filter((item) => item.userId === req.user.id);
 
-      // Фильтрация по completed (выполненные задачи)
-      // if (req.query.completed !== undefined) {
-      //   const isCompleted = req.query.completed === 'true';
-      //   userTask = userTask.filter((item) => item.completed === isCompleted);
-      // }
+      //Фильтрация по completed (выполненные задачи)
+      if (req.query.completed !== undefined) {
+        const isCompleted = req.query.completed === 'true';
+        userTask = userTask.filter((item) => item.completed === isCompleted);
+      }
 
       res.json({
         count: userTask.length,
@@ -192,21 +192,22 @@ app.post(
   auth,
   validateCreateTask,
   handleValidationErrors,
-  async (req, res) => {
+  async (req, res, next) => {
     try {
       const { title } = req.body;
       const db = await readBD();
 
-      db.tasks.push({
+      const newTask = {
         userId: req.user.id,
         id: randomUUID(),
         title,
         completed: false,
-      });
+      };
+      db.tasks.push(newTask);
       await writeBD(db);
       res.status(201).json({
         message: 'Задача создана успешно',
-        task: db[db.length - 1],
+        task: newTask,
       });
     } catch (error) {
       next(error);
