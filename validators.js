@@ -2,7 +2,7 @@ const { body, param, query, validationResult } = require('express-validator');
 
 function taskId() {
   return param('id')
-    .isInt({ min: 1 })
+    .isUUID(4)
     .withMessage('id должен быть положительным целым числом')
     .toInt();
 }
