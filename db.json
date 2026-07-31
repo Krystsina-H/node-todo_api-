@@ -9,6 +9,11 @@
       "id": "f02bb1ec-fc7f-4312-8346-4eeadbd16469",
       "email": "test1@mail.ru",
       "passwordHash": "$2b$10$2ojijITKf3MFxJPMl.3DbOr6sZNKMDoKHyFfU1iZIhx21jcNv1hMK"
+    },
+    {
+      "id": "9171670c-fd3f-4699-9f6b-3bbe05cabb48",
+      "email": "test111@mail.ru",
+      "passwordHash": "$2b$10$eMQPeP5gEPiTYU5HN0nS8uI5tBZiuMjtEboLejCtLSzbKTairCygC"
     }
   ],
   "tasks": [
@@ -34,6 +39,12 @@
       "userId": "f02bb1ec-fc7f-4312-8346-4eeadbd16469",
       "id": "5b55ee28-fa32-46b5-832b-b04948d47af1",
       "title": "Пройти курс",
+      "completed": false
+    },
+    {
+      "userId": "9171670c-fd3f-4699-9f6b-3bbe05cabb48",
+      "id": "8dcaeba5-3e6f-43ff-9d03-0da4d801d137",
+      "title": "Купить молоко",
       "completed": false
     }
   ]

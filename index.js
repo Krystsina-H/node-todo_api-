@@ -40,11 +40,17 @@ app.get('/', (req, res) => {
 //чтение БД (файла db.json)
 async function readBD() {
   try {
+    // Проверяем, существует ли файл
+    await fs.access(DB);
+    // Если существует - читаем
     const data = await fs.readFile(DB, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
-    if (error.code == 'ENOENT') {
+    // Если файл не существует (ENOENT) или любая другая ошибка чтения
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
       const initialData = { users: [], tasks: [] };
+      // Создаем директорию, если её нет
+      await fs.mkdir(path.dirname(DB), { recursive: true });
       await fs.writeFile(DB, JSON.stringify(initialData, null, 2));
       return initialData;
     }
