@@ -312,7 +312,7 @@ app.patch(
     const tasks = db.collection('tasks');
 
     try {
-      const { completed } = req.body;
+      const { title, description, completed } = req.body;
       const objectId = new ObjectId(req.params.id);
 
       const task = await tasks.findOne({ _id: objectId });
@@ -326,9 +326,14 @@ app.patch(
         return res.status(403).json({ error: 'Нет доступа к этой задаче' });
       }
 
+      const update = {};
+      if (title !== undefined) update.title = title.trim();
+      if (description !== undefined) update.description = description.trim();
+      if (completed !== undefined) update.completed = !!completed;
+
       await tasks.updateOne(
         { _id: objectId },
-        { $set: { completed: !!completed } },
+        { $set: update },
       );
 
       const updated = await tasks.findOne({ _id: objectId });
