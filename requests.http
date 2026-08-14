@@ -1,13 +1,14 @@
 @token={{login.response.body.token}}
 
-###POST_reg регистрация
-POST http://localhost:5001/register
+### POST регистр с манго
+POST http://localhost:5001/registration
 Content-Type: application/json
 
 {
-    "email":"test@mail.ru",
+    "email":"Test444@gmail.com",
     "password":"123456"
 }
+
 
 ###POST_login
 # @name login
@@ -15,7 +16,7 @@ POST http://localhost:5001/login
 Content-Type: application/json
 
 {
-     "email":"test@mail.ru",
+    "email":"Test444@gmail.com",
     "password":"123456"
 }
 
@@ -26,8 +27,9 @@ GET http://localhost:5001/tasks
 Authorization: Bearer {{token}}
 
 ### GET2 получить по id
-GET http://localhost:5001/tasks/2
+GET http://localhost:5001/tasks/6a70f751d86ae285fd9f547b
 Authorization: Bearer {{token}}
+
 
 ### POST создать
 POST http://localhost:5001/tasks
@@ -35,12 +37,12 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-    "title":"НОВАЯ ЗАДАЧА"
+    "title":"Купить продукты"
 }
 
 
 ### PUT изменить title
-PUT http://localhost:5001/tasks/2
+PUT http://localhost:5001/tasks/6a70f751d86ae285fd9f547b
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -50,7 +52,7 @@ Content-Type: application/json
 }
 
 ### PATCH изменить статус
-PATCH http://localhost:5001/tasks/1
+PATCH http://localhost:5001/tasks/6a70f751d86ae285fd9f547b
 Authorization: Bearer {{token}}
 Content-Type: application/json
 

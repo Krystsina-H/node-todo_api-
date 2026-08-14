@@ -4,8 +4,8 @@ const spec = {
   openapi: '3.0.0',
 
   info: {
-    title: 'Tasks API',
-    version: '1.0.0',
+    title: 'Todos API',
+    version: '2.0.0',
     description: 'API для управления задачами с JWT аутентификацией',
     contact: {
       name: 'API Support',
@@ -18,10 +18,6 @@ const spec = {
       url: 'http://localhost:5001',
       description: 'Development server',
     },
-    {
-      url: 'https://node-todo-api-binb.onrender.com',
-      description: 'Production server (Render)',
-    },
   ],
 
   components: {
@@ -31,7 +27,7 @@ const spec = {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         description:
-          'Токен из POST /login. Вставляй сам токен, без слова Bearer — Swagger подставит его сам.',
+          'Токен из POST /api/auth/login. Вставляй сам токен, без слова Bearer — Swagger подставит его сам.',
       },
     },
     schemas: {
@@ -40,14 +36,12 @@ const spec = {
         properties: {
           id: {
             type: 'string',
-            format: 'uuid',
-            example: '123e4567-e89b-12d3-a456-426614174000',
+            example: '6a74cb17ab064faec53c1f45',
             description: 'Уникальный идентификатор задачи',
           },
           userId: {
             type: 'string',
-            format: 'uuid',
-            example: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
+            example: '6a74cb01ab064faec53c1f44',
             description: 'ID пользователя, которому принадлежит задача',
           },
           title: {
@@ -55,6 +49,11 @@ const spec = {
             minLength: 3,
             example: 'Купить молоко',
             description: 'Название задачи',
+          },
+          description: {
+            type: 'string',
+            example: '2 литра, 3.2%',
+            description: 'Описание задачи',
           },
           completed: {
             type: 'boolean',
@@ -68,13 +67,28 @@ const spec = {
         properties: {
           id: {
             type: 'string',
-            format: 'uuid',
-            example: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
+            example: '6a74cb01ab064faec53c1f44',
+          },
+          name: {
+            type: 'string',
+            example: 'Test User',
           },
           email: {
             type: 'string',
             format: 'email',
             example: 'user@example.com',
+          },
+        },
+      },
+      AuthResponse: {
+        type: 'object',
+        properties: {
+          access_token: {
+            type: 'string',
+            example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          },
+          user: {
+            $ref: '#/components/schemas/User',
           },
         },
       },
@@ -87,23 +101,14 @@ const spec = {
           },
         },
       },
-      Success: {
-        type: 'object',
-        properties: {
-          message: {
-            type: 'string',
-            example: 'Операция выполнена успешно',
-          },
-        },
-      },
     },
   },
 
   paths: {
-    '/register': {
+    '/api/auth/register': {
       post: {
         summary: 'Регистрация нового пользователя',
-        description: 'Создает нового пользователя с хешированным паролем',
+        description: 'Создает нового пользователя с хешированным паролем и возвращает JWT токен',
         tags: ['Auth'],
         requestBody: {
           required: true,
@@ -111,8 +116,12 @@ const spec = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'password'],
+                required: ['name', 'email', 'password'],
                 properties: {
+                  name: {
+                    type: 'string',
+                    example: 'Test User',
+                  },
                   email: {
                     type: 'string',
                     format: 'email',
@@ -120,8 +129,8 @@ const spec = {
                   },
                   password: {
                     type: 'string',
-                    minLength: 8,
-                    example: 'password123',
+                    minLength: 6,
+                    example: '123456',
                   },
                 },
               },
@@ -133,26 +142,25 @@ const spec = {
             description: 'Пользователь создан успешно',
             content: {
               'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/AuthResponse',
+                },
                 example: {
-                  id: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
-                  email: 'user@example.com',
+                  access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                  user: {
+                    id: '6a74cb01ab064faec53c1f44',
+                    name: 'Test User',
+                    email: 'user@example.com',
+                  },
                 },
               },
             },
           },
-          409: {
-            description: 'Email уже занят',
-            content: {
-              'application/json': {
-                example: { error: 'Email уже занят' },
-              },
-            },
-          },
           400: {
-            description: 'Неверные данные',
+            description: 'Пользователь уже существует или неверные данные',
             content: {
               'application/json': {
-                example: { error: 'Неверный формат email или пароль' },
+                example: { error: 'Пользователь уже существует' },
               },
             },
           },
@@ -160,7 +168,7 @@ const spec = {
       },
     },
 
-    '/login': {
+    '/api/auth/login': {
       post: {
         summary: 'Вход в систему',
         description: 'Аутентификация пользователя и получение JWT токена',
@@ -180,7 +188,7 @@ const spec = {
                   },
                   password: {
                     type: 'string',
-                    example: 'password123',
+                    example: '123456',
                   },
                 },
               },
@@ -192,9 +200,16 @@ const spec = {
             description: 'Успешный вход, возвращает JWT токен',
             content: {
               'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/AuthResponse',
+                },
                 example: {
-                  token:
-                    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjlmMWM4ZDNlLTdiNGEtNGM1ZC04ZTlmLTFhMmIzYzRkNWU2ZiIsImVtYWlsIjoidXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTc4NDk1ODAzNiwiZXhwIjoxNzg0OTYxNjM2fQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+                  access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                  user: {
+                    id: '6a74cb01ab064faec53c1f44',
+                    name: 'Test User',
+                    email: 'user@example.com',
+                  },
                 },
               },
             },
@@ -211,12 +226,12 @@ const spec = {
       },
     },
 
-    '/tasks': {
+    '/api/todos': {
       get: {
         summary: 'Получить все задачи пользователя',
         description:
           'Возвращает список всех задач текущего пользователя с возможностью фильтрации',
-        tags: ['Tasks'],
+        tags: ['Todos'],
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -236,18 +251,19 @@ const spec = {
             content: {
               'application/json': {
                 example: {
-                  count: 2,
-                  tasks: [
+                  data: [
                     {
-                      id: '123e4567-e89b-12d3-a456-426614174000',
-                      userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
+                      id: '6a74cb17ab064faec53c1f45',
+                      userId: '6a74cb01ab064faec53c1f44',
                       title: 'Купить молоко',
+                      description: '',
                       completed: false,
                     },
                     {
-                      id: '223e4567-e89b-12d3-a456-426614174001',
-                      userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
+                      id: '6a74cb17ab064faec53c1f46',
+                      userId: '6a74cb01ab064faec53c1f44',
                       title: 'Сделать домашнее задание',
+                      description: 'Математика и физика',
                       completed: true,
                     },
                   ],
@@ -268,7 +284,7 @@ const spec = {
       post: {
         summary: 'Создать новую задачу',
         description: 'Создает новую задачу для текущего пользователя',
-        tags: ['Tasks'],
+        tags: ['Todos'],
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -281,9 +297,15 @@ const spec = {
                   title: {
                     type: 'string',
                     minLength: 3,
-                    maxLength: 255,
+                    maxLength: 100,
                     example: 'Купить молоко',
                     description: 'Название задачи',
+                  },
+                  description: {
+                    type: 'string',
+                    maxLength: 500,
+                    example: '2 литра, 3.2%',
+                    description: 'Описание задачи',
                   },
                 },
               },
@@ -296,13 +318,11 @@ const spec = {
             content: {
               'application/json': {
                 example: {
-                  message: 'Задача создана успешно',
-                  task: {
-                    id: '123e4567-e89b-12d3-a456-426614174000',
-                    userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
-                    title: 'Купить молоко',
-                    completed: false,
-                  },
+                  id: '6a74cb17ab064faec53c1f45',
+                  userId: '6a74cb01ab064faec53c1f44',
+                  title: 'Купить молоко',
+                  description: '',
+                  completed: false,
                 },
               },
             },
@@ -329,12 +349,12 @@ const spec = {
       },
     },
 
-    '/tasks/{id}': {
+    '/api/todos/{id}': {
       get: {
         summary: 'Получить задачу по ID',
         description:
           'Возвращает задачу с указанным ID, если она принадлежит текущему пользователю',
-        tags: ['Tasks'],
+        tags: ['Todos'],
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -344,9 +364,8 @@ const spec = {
             description: 'ID задачи',
             schema: {
               type: 'string',
-              format: 'uuid',
             },
-            example: '123e4567-e89b-12d3-a456-426614174000',
+            example: '6a74cb17ab064faec53c1f45',
           },
         ],
         responses: {
@@ -355,9 +374,10 @@ const spec = {
             content: {
               'application/json': {
                 example: {
-                  id: '123e4567-e89b-12d3-a456-426614174000',
-                  userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
+                  id: '6a74cb17ab064faec53c1f45',
+                  userId: '6a74cb01ab064faec53c1f44',
                   title: 'Купить молоко',
+                  description: '',
                   completed: false,
                 },
               },
@@ -383,16 +403,16 @@ const spec = {
             description: 'Задача не найдена',
             content: {
               'application/json': {
-                example: { error: 'задача не найдена' },
+                example: { error: 'Задача не найдена' },
               },
             },
           },
         },
       },
       put: {
-        summary: 'Полностью обновить задачу',
+        summary: 'Обновить название задачи',
         description: 'Заменяет название задачи на новое',
-        tags: ['Tasks'],
+        tags: ['Todos'],
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -402,9 +422,8 @@ const spec = {
             description: 'ID задачи',
             schema: {
               type: 'string',
-              format: 'uuid',
             },
-            example: '123e4567-e89b-12d3-a456-426614174000',
+            example: '6a74cb17ab064faec53c1f45',
           },
         ],
         requestBody: {
@@ -418,7 +437,7 @@ const spec = {
                   title: {
                     type: 'string',
                     minLength: 3,
-                    maxLength: 255,
+                    maxLength: 100,
                     example: 'Купить хлеб',
                     description: 'Новое название задачи',
                   },
@@ -433,13 +452,11 @@ const spec = {
             content: {
               'application/json': {
                 example: {
-                  message: 'Задача обновлена успешно',
-                  task: {
-                    id: '123e4567-e89b-12d3-a456-426614174000',
-                    userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
-                    title: 'Купить хлеб',
-                    completed: false,
-                  },
+                  id: '6a74cb17ab064faec53c1f45',
+                  userId: '6a74cb01ab064faec53c1f44',
+                  title: 'Купить хлеб',
+                  description: '',
+                  completed: false,
                 },
               },
             },
@@ -464,7 +481,7 @@ const spec = {
             description: 'Задача не найдена',
             content: {
               'application/json': {
-                example: { error: 'задача с id 123 не найдена' },
+                example: { error: 'Задача не найдена' },
               },
             },
           },
@@ -472,8 +489,8 @@ const spec = {
       },
       patch: {
         summary: 'Частично обновить задачу',
-        description: 'Обновляет статус выполнения задачи',
-        tags: ['Tasks'],
+        description: 'Обновляет поля задачи (title, description, completed)',
+        tags: ['Todos'],
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -483,9 +500,8 @@ const spec = {
             description: 'ID задачи',
             schema: {
               type: 'string',
-              format: 'uuid',
             },
-            example: '123e4567-e89b-12d3-a456-426614174000',
+            example: '6a74cb17ab064faec53c1f45',
           },
         ],
         requestBody: {
@@ -494,12 +510,18 @@ const spec = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['completed'],
                 properties: {
+                  title: {
+                    type: 'string',
+                    example: 'Купить хлеб',
+                  },
+                  description: {
+                    type: 'string',
+                    example: 'Бородинский',
+                  },
                   completed: {
                     type: 'boolean',
                     example: true,
-                    description: 'Новый статус выполнения',
                   },
                 },
               },
@@ -508,13 +530,14 @@ const spec = {
         },
         responses: {
           200: {
-            description: 'Статус задачи обновлен',
+            description: 'Задача обновлена',
             content: {
               'application/json': {
                 example: {
-                  id: '123e4567-e89b-12d3-a456-426614174000',
-                  userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
-                  title: 'Купить молоко',
+                  id: '6a74cb17ab064faec53c1f45',
+                  userId: '6a74cb01ab064faec53c1f44',
+                  title: 'Купить хлеб',
+                  description: 'Бородинский',
                   completed: true,
                 },
               },
@@ -540,7 +563,7 @@ const spec = {
             description: 'Задача не найдена',
             content: {
               'application/json': {
-                example: { error: 'Задача с id 123 не найдена' },
+                example: { error: 'Задача не найдена' },
               },
             },
           },
@@ -550,7 +573,7 @@ const spec = {
         summary: 'Удалить задачу',
         description:
           'Удаляет задачу с указанным ID, если она принадлежит текущему пользователю',
-        tags: ['Tasks'],
+        tags: ['Todos'],
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -560,9 +583,8 @@ const spec = {
             description: 'ID задачи',
             schema: {
               type: 'string',
-              format: 'uuid',
             },
-            example: '123e4567-e89b-12d3-a456-426614174000',
+            example: '6a74cb17ab064faec53c1f45',
           },
         ],
         responses: {
@@ -572,12 +594,6 @@ const spec = {
               'application/json': {
                 example: {
                   message: 'Задача удалена',
-                  deleted: {
-                    id: '123e4567-e89b-12d3-a456-426614174000',
-                    userId: '9f1c8d3e-7b4a-4c5d-8e9f-1a2b3c4d5e6f',
-                    title: 'Купить молоко',
-                    completed: false,
-                  },
                 },
               },
             },
@@ -602,7 +618,68 @@ const spec = {
             description: 'Задача не найдена',
             content: {
               'application/json': {
-                example: { error: 'задача с id 123 не найдена' },
+                example: { error: 'Задача не найдена' },
+              },
+            },
+          },
+        },
+      },
+    },
+
+    '/api/todos/{id}/toggle': {
+      patch: {
+        summary: 'Переключить статус задачи',
+        description: 'Инвертирует статус completed задачи (true ↔ false)',
+        tags: ['Todos'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'ID задачи',
+            schema: {
+              type: 'string',
+            },
+            example: '6a74cb17ab064faec53c1f45',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Статус задачи переключен',
+            content: {
+              'application/json': {
+                example: {
+                  id: '6a74cb17ab064faec53c1f45',
+                  userId: '6a74cb01ab064faec53c1f44',
+                  title: 'Купить молоко',
+                  description: '',
+                  completed: true,
+                },
+              },
+            },
+          },
+          401: {
+            description: 'Токен невалиден или истёк',
+            content: {
+              'application/json': {
+                example: { error: 'Токен невалиден' },
+              },
+            },
+          },
+          403: {
+            description: 'Нет доступа к этой задаче',
+            content: {
+              'application/json': {
+                example: { error: 'Нет доступа к этой задаче' },
+              },
+            },
+          },
+          404: {
+            description: 'Задача не найдена',
+            content: {
+              'application/json': {
+                example: { error: 'Задача не найдена' },
               },
             },
           },

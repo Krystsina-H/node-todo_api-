@@ -2,8 +2,8 @@ const { body, param, query, validationResult } = require('express-validator');
 
 function taskId() {
   return param('id')
-    .isUUID(4)
-    .withMessage('id должен быть положительным целым числом')
+    .isMongoId()
+    .withMessage('id должен быть валидным MongoDB ObjectId')
     .trim();
 }
 

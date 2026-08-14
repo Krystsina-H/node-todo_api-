@@ -6,15 +6,13 @@ const bcrypt = require('bcryptjs');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
 
-const Sentry = require('@sentry/node');
-const fs = require('fs/promises');
-const path = require('path');
 const jwt = require('jsonwebtoken');
+const { MongoClient, ObjectId } = require('mongodb');
 
-const DB = path.join(__dirname, 'db.json');
 const app = express();
 const {
   taskId,
+  validateLogin,
   validateCreateTask,
   validateReplaceTask,
   validatePatchTask,
@@ -37,75 +35,32 @@ app.get('/', (req, res) => {
   res.redirect('/api-docs');
 });
 
-//чтение БД (файла db.json)
-async function readBD() {
-  try {
-    // Проверяем, существует ли файл
-    await fs.access(DB);
-    // Если существует - читаем
-    const data = await fs.readFile(DB, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
-    // Если файл не существует (ENOENT) или любая другая ошибка чтения
-    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
-      const initialData = { users: [], tasks: [] };
-      // Создаем директорию, если её нет
-      await fs.mkdir(path.dirname(DB), { recursive: true });
-      await fs.writeFile(DB, JSON.stringify(initialData, null, 2));
-      return initialData;
-    }
-    throw error;
+const MONGODB_URI = process.env.MONGODB_URI;
+const DB_NAME = process.env.MONGO_DB_NAME;
+
+//регистрация с манго
+app.post('/api/auth/register', async (req, res) => {
+  const client = new MongoClient(MONGODB_URI);
+  const connection = await client.connect();
+  const users = connection.db(DB_NAME).collection('users');
+  const { name, email, password } = req.body;
+  const existingUser = await users.findOne({ email });
+  if (existingUser) {
+    await client.close();
+    return res.status(400).json({ error: 'Пользователь уже существует' });
   }
-}
-
-//запись в бд (файла db.json)
-async function writeBD(data) {
-  await fs.writeFile(DB, JSON.stringify(data, null, 2));
-}
-
-app.post('/register', async (req, res) => {
-  const { email, password } = req.body;
-  const db = await readBD();
-
   const user = {
-    id: randomUUID(),
+    name,
     email,
     passwordHash: await bcrypt.hash(password, 10),
   };
-
-  db.users.push(user);
-  await writeBD(db);
-
-  res.status(201).json({ id: user.id, email: user.email });
+  const result = await users.insertOne(user);
+  const token = signToken({ _id: result.insertedId, name, email });
+  await client.close();
+  res.status(201).json({ access_token: token, user: { id: result.insertedId.toString(), name, email } });
 });
 
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const db = await readBD();
-  const user = db.users.find((i) => i.email === email);
-  if (!user) {
-    return res.status(401).json({ error: 'Неверный email или пароль' });
-  }
-  const pass = await bcrypt.compare(password, user.passwordHash);
-  if (!pass) {
-    return res.status(401).json({ error: 'Неверный email или пароль' });
-  }
-  res.json({ token: signToken(user) });
-});
-//ФОРМИРУЕМ ТОКЕН!!!!! И ВЫЗЫВАЕМ ВЫШЕ
-// ФОРМИРУЕМ ТОКЕН!!!!! И ВЫЗЫВАЕМ ВЫШЕ
-function signToken(user) {
-  // Если в .env строка '1h' - оставляем как есть. Если '3600' - превращаем в число
-  let ttl = process.env.TOKEN_TTL;
-  if (typeof ttl === 'string' && /^\d+$/.test(ttl)) {
-    ttl = parseInt(ttl, 10);
-  }
-
-  return jwt.sign({ id: user.id, email: user.email }, process.env.SECRET, {
-    expiresIn: ttl, // Теперь это значение безопасно для библиотеки
-  });
-}
-
+//аутентификация
 function auth(req, res, next) {
   // 1. Проверяем, есть ли вообще заголовок, чтобы не упасть
   const authHeader = req.headers.authorization;
@@ -122,7 +77,8 @@ function auth(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(token, process.env.SECRET, { algorithms: ['HS256'] });
+    const decoded = jwt.verify(token, process.env.SECRET, { algorithms: ['HS256'] });
+    req.user = { id: decoded.id?.toString() || decoded._id?.toString(), email: decoded.email };
     next();
   } catch (error) {
     const expired = error.name === 'TokenExpiredError';
@@ -131,182 +87,336 @@ function auth(req, res, next) {
       .json({ error: expired ? 'Токен истёк' : 'Токен невалиден' });
   }
 }
-// GET получить все таски
+//логин
+app.post('/api/auth/login', async (req, res) => {
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  const db = client.db(DB_NAME);
+  const users = db.collection('users');
+
+  try {
+    const { email, password } = req.body;
+    const user = await users.findOne({ email });
+    if (!user) {
+      res.status(401).json({ error: 'Неверный email или пароль' });
+      return;
+    }
+    const pass = await bcrypt.compare(password, user.passwordHash);
+    if (!pass) {
+      res.status(401).json({ error: 'Неверный email или пароль' });
+      return;
+    }
+
+    res.json({ access_token: signToken(user), user: { id: user._id.toString(), name: user.name, email: user.email } });
+  } finally {
+    await client.close();
+  }
+});
+
+//формируем токен
+function signToken(user) {
+  // Если в .env строка '1h' - оставляем как есть. Если '3600' - превращаем в число
+  let ttl = process.env.TOKEN_TTL;
+  if (typeof ttl === 'string' && /^\d+$/.test(ttl)) {
+    ttl = parseInt(ttl, 10);
+  }
+
+  return jwt.sign({ id: user._id, email: user.email }, process.env.SECRET, {
+    expiresIn: ttl, // Теперь это значение безопасно для библиотеки
+  });
+}
+
+// получить все таски
 app.get(
-  '/tasks',
+  '/api/todos',
   auth,
   validateGetTasks,
   handleValidationErrors,
   async (req, res, next) => {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
     try {
-      let db = await readBD();
-
-      // Фильтруем задачи именно этого пользователя
-      let userTask = db.tasks.filter((item) => item.userId === req.user.id);
-
-      //Фильтрация по completed (выполненные задачи)
+      const filter = { userId: req.user.id };
       if (req.query.completed !== undefined) {
-        const isCompleted = req.query.completed === 'true';
-        userTask = userTask.filter((item) => item.completed === isCompleted);
+        filter.completed = req.query.completed === 'true';
       }
-
+      const userTasks = await tasks.find(filter).toArray();
+      const formattedTasks = userTasks.map(task => ({
+        id: task._id.toString(),
+        userId: task.userId,
+        title: task.title,
+        description: task.description,
+        completed: task.completed,
+      }));
       res.json({
-        count: userTask.length,
-        tasks: userTask,
+        data: formattedTasks,
       });
     } catch (error) {
       next(error);
+    } finally {
+      await client.close();
     }
   },
 );
 
-// Get получаю таски по id
+//получить таски по id
 app.get(
-  '/tasks/:id',
+  '/api/todos/:id',
   auth,
   taskId(),
   handleValidationErrors,
   async (req, res, next) => {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'задача не найдена' });
+    }
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
     try {
-      const db = await readBD();
       const { id } = req.params;
-      const task = db.tasks.find((item) => item.id == id);
+      const task = await tasks.findOne({ _id: new ObjectId(id) });
       if (!task) {
         return res.status(404).json({ error: 'задача не найдена' });
       }
-
-      //Проверяю, что принадлежит именно этому поль-лю
-      if (task.userId !== req.user.id) {
+      if (task.userId?.toString() !== req.user.id) {
         return res.status(403).json({ error: 'Нет доступа к этой задаче' });
       }
-      res.json(task);
+      res.json({
+        id: task._id.toString(),
+        userId: task.userId,
+        title: task.title,
+        description: task.description,
+        completed: task.completed,
+      });
     } catch (error) {
       next(error);
+    } finally {
+      await client.close();
     }
   },
 );
 
 //POST- создание новой таски
 app.post(
-  '/tasks',
+  '/api/todos',
   auth,
   validateCreateTask,
   handleValidationErrors,
   async (req, res, next) => {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
     try {
-      const { title } = req.body;
-      const db = await readBD();
-
+      const { title, description } = req.body;
       const newTask = {
         userId: req.user.id,
-        id: randomUUID(),
-        title,
+        title: title.trim(),
+        description: description || '',
         completed: false,
       };
-      db.tasks.push(newTask);
-      await writeBD(db);
+      const result = await tasks.insertOne(newTask);
       res.status(201).json({
-        message: 'Задача создана успешно',
-        task: newTask,
+        id: result.insertedId.toString(),
+        userId: newTask.userId,
+        title: newTask.title,
+        description: newTask.description,
+        completed: newTask.completed,
       });
     } catch (error) {
       next(error);
+    } finally {
+      await client.close();
     }
   },
 );
 
 //PUT-Обновить задачу  title по id
-
 app.put(
-  '/tasks/:id',
+  '/api/todos/:id',
   auth,
   validateReplaceTask,
   handleValidationErrors,
   async (req, res, next) => {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'задача не найдена' });
+    }
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
     try {
-      const { id } = req.params;
       const { title } = req.body;
-
-      const db = await readBD();
-      const taskIndex = db.tasks.findIndex((item) => item.id == id);
-      if (taskIndex == -1) {
-        return res.status(404).json({ error: `задача с id ${id} не найдена` });
+      const objectId = new ObjectId(req.params.id);
+      const task = await tasks.findOne({ _id: objectId });
+      if (!task) {
+        return res
+          .status(404)
+          .json({ error: `задача с id ${req.params.id} не найдена` });
       }
-      //проверяю, что задача именно этого польз-ля
-      if (db.tasks[taskIndex].userId !== req.user.id) {
+
+      if (task.userId?.toString() !== req.user.id) {
         return res.status(403).json({ error: 'Нет доступа к этой задаче' });
       }
-      db.tasks[taskIndex].title = title.trim();
-      await writeBD(db);
+      await tasks.updateOne(
+        { _id: objectId },
+        { $set: { title: title.trim() } },
+      );
+
+      const updated = await tasks.findOne({ _id: objectId });
       res.json({
-        message: 'Задача обновлена успешно',
-        task: db.tasks[taskIndex],
+        id: updated._id.toString(),
+        userId: updated.userId,
+        title: updated.title,
+        description: updated.description,
+        completed: updated.completed,
       });
     } catch (error) {
       next(error);
+    } finally {
+      await client.close();
     }
   },
 );
-
-//PATCH - изменение статуса
+// переключить статус задачи (toggle)
 app.patch(
-  '/tasks/:id',
+  '/api/todos/:id/toggle',
+  auth,
+  async (req, res, next) => {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'Задача не найдена' });
+    }
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
+
+    try {
+      const objectId = new ObjectId(req.params.id);
+      const task = await tasks.findOne({ _id: objectId });
+      if (!task) {
+        await client.close();
+        return res.status(404).json({ error: 'Задача не найдена' });
+      }
+      if (task.userId?.toString() !== req.user.id) {
+        await client.close();
+        return res.status(403).json({ error: 'Нет доступа к этой задаче' });
+      }
+      await tasks.updateOne(
+        { _id: objectId },
+        { $set: { completed: !task.completed } },
+      );
+      const updated = await tasks.findOne({ _id: objectId });
+      res.json({
+        id: updated._id.toString(),
+        userId: updated.userId,
+        title: updated.title,
+        description: updated.description,
+        completed: updated.completed,
+      });
+    } catch (error) {
+      console.error('Ошибка toggle', error);
+      res.status(500).json({ error: 'Ошибка обновления статуса' });
+    } finally {
+      await client.close();
+    }
+  },
+);
+// изменить статус задачи
+app.patch(
+  '/api/todos/:id',
   auth,
   validatePatchTask,
   handleValidationErrors,
   async (req, res, next) => {
-    try {
-      const { id } = req.params;
-      const { completed } = req.body;
-      const db = await readBD();
-      const taskIndex = db.tasks.findIndex((task) => task.id == id);
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'задача не найдена' });
+    }
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
 
-      if (taskIndex === -1) {
-        return res.status(404).json({ error: `Задача с id ${id} не найдена` });
+    try {
+      const { completed } = req.body;
+      const objectId = new ObjectId(req.params.id);
+
+      const task = await tasks.findOne({ _id: objectId });
+      if (!task) {
+        return res
+          .status(404)
+          .json({ error: `Задача с id ${req.params.id} не найдена` });
       }
-      //проверяю, что принадлежит именно этому пользователю
-      if (db.tasks[taskIndex].userId !== req.user.id) {
+
+      if (task.userId?.toString() !== req.user.id) {
         return res.status(403).json({ error: 'Нет доступа к этой задаче' });
       }
 
-      db.tasks[taskIndex].completed = !!completed;
-      await writeBD(db);
-      res.json(db.tasks[taskIndex]);
+      await tasks.updateOne(
+        { _id: objectId },
+        { $set: { completed: !!completed } },
+      );
+
+      const updated = await tasks.findOne({ _id: objectId });
+      res.json({
+        id: updated._id.toString(),
+        userId: updated.userId,
+        title: updated.title,
+        description: updated.description,
+        completed: updated.completed,
+      });
     } catch (error) {
       console.error('Ошибка PATCH', error);
       res.status(500).json({ error: 'Ошибка обновления статуса' });
+    } finally {
+      await client.close();
     }
   },
 );
 
-//DELETE - удаление по id
+//удалить задачу ===
 app.delete(
-  '/tasks/:id',
+  '/api/todos/:id',
   auth,
   taskId(),
   handleValidationErrors,
   async (req, res) => {
+    if (!ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'задача не найдена' });
+    }
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const tasks = db.collection('tasks');
+
     try {
-      const { id } = req.params;
-      const db = await readBD();
-      const taskIndex = db.tasks.findIndex((item) => item.id == id);
-      if (taskIndex == -1) {
-        return res.status(404).json(`задача с id ${id} не найдена`);
+      const objectId = new ObjectId(req.params.id);
+
+      const task = await tasks.findOne({ _id: objectId });
+      if (!task) {
+        return res
+          .status(404)
+          .json({ error: `задача с id ${req.params.id} не найдена` });
       }
 
-      //проверяю, что принадлежит именно этому пользователю
-      if (db.tasks[taskIndex].userId !== req.user.id) {
+      if (task.userId?.toString() !== req.user.id) {
         return res.status(403).json({ error: 'Нет доступа к этой задаче' });
       }
-      const deleteTask = db.tasks.splice(taskIndex, 1);
-      await writeBD(db);
+
+      await tasks.deleteOne({ _id: objectId });
+
       res.json({
         message: 'Задача удалена',
-        deleted: deleteTask,
+        deleted: task,
       });
     } catch (error) {
       console.error('ошибка DELETE', error);
       res.status(500).json({ error: 'Ошибка при удалении' });
+    } finally {
+      await client.close();
     }
   },
 );
