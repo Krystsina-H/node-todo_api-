@@ -1,4 +1,12 @@
-const { error } = require('console');
+const dns = require('dns');
+const resolver = new dns.promises.Resolver();
+resolver.setServers(['8.8.8.8', '8.8.4.4']);
+dns.promises.resolve = resolver.resolve.bind(resolver);
+dns.promises.resolve4 = resolver.resolve4.bind(resolver);
+dns.promises.resolve6 = resolver.resolve6.bind(resolver);
+dns.promises.resolveSrv = resolver.resolveSrv.bind(resolver);
+dns.promises.resolveTxt = resolver.resolveTxt.bind(resolver);
+dns.promises.resolveCname = resolver.resolveCname.bind(resolver);
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -20,7 +28,6 @@ const {
   handleValidationErrors,
 } = require('./validators');
 const { body } = require('express-validator');
-const { randomUUID } = require('crypto');
 
 app.use(cors());
 app.use(express.json());
@@ -38,15 +45,21 @@ app.get('/', (req, res) => {
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = process.env.MONGO_DB_NAME;
 
+let db;
+
+async function connectDB() {
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  db = client.db(DB_NAME);
+  console.log('MongoDB подключена');
+}
+
 //регистрация с манго
 app.post('/api/auth/register', async (req, res) => {
-  const client = new MongoClient(MONGODB_URI);
-  const connection = await client.connect();
-  const users = connection.db(DB_NAME).collection('users');
+  const users = db.collection('users');
   const { name, email, password } = req.body;
   const existingUser = await users.findOne({ email });
   if (existingUser) {
-    await client.close();
     return res.status(400).json({ error: 'Пользователь уже существует' });
   }
   const user = {
@@ -56,7 +69,6 @@ app.post('/api/auth/register', async (req, res) => {
   };
   const result = await users.insertOne(user);
   const token = signToken({ _id: result.insertedId, name, email });
-  await client.close();
   res.status(201).json({ access_token: token, user: { id: result.insertedId.toString(), name, email } });
 });
 
@@ -89,28 +101,17 @@ function auth(req, res, next) {
 }
 //логин
 app.post('/api/auth/login', async (req, res) => {
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  const db = client.db(DB_NAME);
   const users = db.collection('users');
-
-  try {
-    const { email, password } = req.body;
-    const user = await users.findOne({ email });
-    if (!user) {
-      res.status(401).json({ error: 'Неверный email или пароль' });
-      return;
-    }
-    const pass = await bcrypt.compare(password, user.passwordHash);
-    if (!pass) {
-      res.status(401).json({ error: 'Неверный email или пароль' });
-      return;
-    }
-
-    res.json({ access_token: signToken(user), user: { id: user._id.toString(), name: user.name, email: user.email } });
-  } finally {
-    await client.close();
+  const { email, password } = req.body;
+  const user = await users.findOne({ email });
+  if (!user) {
+    return res.status(401).json({ error: 'Неверный email или пароль' });
   }
+  const pass = await bcrypt.compare(password, user.passwordHash);
+  if (!pass) {
+    return res.status(401).json({ error: 'Неверный email или пароль' });
+  }
+  res.json({ access_token: signToken(user), user: { id: user._id.toString(), name: user.name, email: user.email } });
 });
 
 //формируем токен
@@ -133,9 +134,6 @@ app.get(
   validateGetTasks,
   handleValidationErrors,
   async (req, res, next) => {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
     try {
       const filter = { userId: req.user.id };
@@ -155,8 +153,6 @@ app.get(
       });
     } catch (error) {
       next(error);
-    } finally {
-      await client.close();
     }
   },
 );
@@ -171,9 +167,6 @@ app.get(
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'задача не найдена' });
     }
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
     try {
       const { id } = req.params;
@@ -193,8 +186,6 @@ app.get(
       });
     } catch (error) {
       next(error);
-    } finally {
-      await client.close();
     }
   },
 );
@@ -206,9 +197,6 @@ app.post(
   validateCreateTask,
   handleValidationErrors,
   async (req, res, next) => {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
     try {
       const { title, description } = req.body;
@@ -228,8 +216,6 @@ app.post(
       });
     } catch (error) {
       next(error);
-    } finally {
-      await client.close();
     }
   },
 );
@@ -244,9 +230,6 @@ app.put(
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'задача не найдена' });
     }
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
     try {
       const { title } = req.body;
@@ -276,8 +259,6 @@ app.put(
       });
     } catch (error) {
       next(error);
-    } finally {
-      await client.close();
     }
   },
 );
@@ -289,20 +270,15 @@ app.patch(
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'Задача не найдена' });
     }
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
 
     try {
       const objectId = new ObjectId(req.params.id);
       const task = await tasks.findOne({ _id: objectId });
       if (!task) {
-        await client.close();
         return res.status(404).json({ error: 'Задача не найдена' });
       }
       if (task.userId?.toString() !== req.user.id) {
-        await client.close();
         return res.status(403).json({ error: 'Нет доступа к этой задаче' });
       }
       await tasks.updateOne(
@@ -320,8 +296,6 @@ app.patch(
     } catch (error) {
       console.error('Ошибка toggle', error);
       res.status(500).json({ error: 'Ошибка обновления статуса' });
-    } finally {
-      await client.close();
     }
   },
 );
@@ -335,9 +309,6 @@ app.patch(
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'задача не найдена' });
     }
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
 
     try {
@@ -371,8 +342,6 @@ app.patch(
     } catch (error) {
       console.error('Ошибка PATCH', error);
       res.status(500).json({ error: 'Ошибка обновления статуса' });
-    } finally {
-      await client.close();
     }
   },
 );
@@ -387,9 +356,6 @@ app.delete(
     if (!ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'задача не найдена' });
     }
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
     const tasks = db.collection('tasks');
 
     try {
@@ -415,8 +381,6 @@ app.delete(
     } catch (error) {
       console.error('ошибка DELETE', error);
       res.status(500).json({ error: 'Ошибка при удалении' });
-    } finally {
-      await client.close();
     }
   },
 );
@@ -425,6 +389,12 @@ app.use((error, req, res, next) => {
   console.error('Ошибка:', error);
   res.status(500).json({ message: 'Внутренняя ошибка сервера.' });
 });
-app.listen(process.env.PORT, () => {
-  console.log('Стартуем!');
+
+connectDB().then(() => {
+  app.listen(process.env.PORT, () => {
+    console.log('Стартуем!');
+  });
+}).catch((err) => {
+  console.error('Ошибка подключения к MongoDB:', err);
+  process.exit(1);
 });
